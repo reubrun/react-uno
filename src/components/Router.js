@@ -29,7 +29,7 @@ const Router = () => {
   const [room, setRoom] = useState([]);
 
   useEffect(() => {
-    const newSocket = io("http://localhost:5000", {
+    const newSocket = io("https://react-uno-server.herokuapp.com/", {
       query: {id: userId},
       transports: ['websocket', 'polling', 'flashsocket']
     });
