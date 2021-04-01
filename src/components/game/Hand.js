@@ -47,8 +47,8 @@ const Hand = ({cards, opponent, playCard, numCards}) => {
                                 src={opponent ? cardBack.img : card.img} 
                                 alt={opponent ? cardBack.alt : card.alt}
                                 className={(opponent ? "" : 
-                                  (card.playable ? "unocard" : "unplayable")) +
-                                  " mb-3"
+                                  ((card.playable ? "unocard" : "unplayable")) +
+                                  " mb-3")
                                 }
                                 style={{zIndex: 5}}
                                 width="121" 

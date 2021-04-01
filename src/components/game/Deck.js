@@ -16,7 +16,8 @@ const Deck = ({card, drawNewCard, shoutUno}) => {
                 }}
             ></img>
             <button 
-                type="button" 
+                type="button"
+                disabled={true}
                 className="btn btn-lg btn-primary mx-3"
                 onClick={() => {shoutUno();}}
             >

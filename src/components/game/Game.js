@@ -634,25 +634,27 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
   return (
     <div className="row h-100 mx-0">
         <div className="col p-0 d-flex flex-column h-100 align-items-center justify-content-between">
+            <div className="row d-flex flex-column" style={{height: "33%"}}>
             {
-              currentPlayer && !yourTurn ? <> <span 
-                  className="badge mb-0"
+              currentPlayer && !yourTurn ? <> <h1
+                  className="text-center"
                   style={{
-                    fontSize: "100%",
-                    position: "relative",
-                    top: "20px",
-                    background: userColours[currentPlayer ? currentPlayer.num : 0][0],
-                    color: userColours[currentPlayer ? currentPlayer.num : 0][1]
+                    color: userColours[currentPlayer ? currentPlayer.num : 0][0]
                   }}
-              >{currentPlayer.name}</span>
+              >{currentPlayer.name}</h1>
               <Hand numCards={opponentsHand} opponent={true}/> </> :
               yourTurn ? <h1 
                 style={{
                   color: userColours[currentPlayer ? currentPlayer.num : 0][0]
                 }}>Your Turn</h1> : ""
             }
-            <Deck card={matchCard} drawNewCard={drawNewCard} shoutUno={shoutUno}/>
-            <Hand cards={yourHand} opponent={false} playCard={playCard}/>
+            </div>
+            <div className="row d-flex align-items-center" style={{height: "33%"}}>
+                <Deck card={matchCard} drawNewCard={drawNewCard} shoutUno={shoutUno}/>
+            </div>
+            <div className="row d-flex align-items-end" style={{height: "33%"}}>
+                <Hand cards={yourHand} opponent={false} playCard={playCard}/>
+            </div>
         </div>
         <div className="h-100 p-0 col-2 bg-light d-flex flex-column">
             <div className="h-15">
