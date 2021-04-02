@@ -216,7 +216,8 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
         change:false, 
         matchCard: firstMatchCard.card, 
         ignoreMatch:true, 
-        reverse:isReverse
+        reverse:isReverse,
+        wildColour: false
       });
     }
   }, [userId, socket, cards, drawCards, startUserId]);
@@ -228,8 +229,27 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
 
 
   const [currentPlayer, setCurrentPlayer] = useState(null);
-  const newRound = useCallback(({currentUser, newMatchCard, ignoreMatch, reverse}) => {
+  const [wildColour, setWildColour] = useState(false);
+  const newRound = useCallback(({currentUser, newMatchCard, ignoreMatch, reverse, wildColour}) => {
     setReverse(reverse);
+    setWildColour(wildColour);
+    if (wildColour) {
+      const colours = {
+        'R' : "red",
+        'G' : "green",
+        'Y' : "yellow",
+        'B' : "blue"
+      }
+      setMessages([
+        ...messages,
+        {
+          messageId: "GameBot" + Date.now(),
+          fromId: -1,
+          fromUser: "GameBot",
+          content: "The next colour is " + colours[wildColour]
+        }
+      ]);
+    }
     if (currentUser.userId === userId) {
       //Draw two/four card
       if (!ignoreMatch && newMatchCard.id[1] === "D") {
@@ -253,7 +273,8 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
           change: true, 
           matchCard: newMatchCard, 
           ignoreMatch: true, 
-          reverse: reverse
+          reverse: reverse,
+          wildColour: false
         });
         return;
       }
@@ -263,7 +284,8 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
           change:true, 
           matchCard: newMatchCard, 
           ignoreMatch: true, 
-          reverse: reverse
+          reverse: reverse,
+          wildColour: false
         });
         return;
       }
@@ -318,13 +340,13 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
       setMessages([
         ...messages,
         {
-          messageId: messages.length, 
+          messageId: username + Date.now(), 
           fromId: userNum, 
           fromUser: username, 
           content: message
         },
         {
-          messageId: messages.length + 1,
+          messageId: "GameBot" + Date.now(),
           fromId: -1,
           fromUser: "GameBot",
           content: username + " said uno before you!"
@@ -350,13 +372,14 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
         change:true, 
         matchCard: matchCard, 
         ignoreMatch:false, 
-        reverse:reverse
+        reverse:reverse,
+        wildColour: false
       });
     } else {
       setMessages([
         ...messages, 
         {
-          messageId: messages.length, 
+          messageId: username + Date.now(), 
           fromId: userNum, 
           fromUser: username, 
           content: message
@@ -407,7 +430,7 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
       setMessages([
         ...messages,
         {
-          messageId: messages.length,
+          messageId: "GameBot" + Date.now(),
           fromId: -1, 
           fromUser: "GameBot", 
           content: "There are no more cards in the deck, changing turns..."
@@ -417,7 +440,8 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
         change:true, 
         matchCard: matchCard, 
         ignoreMatch:false, 
-        reverse:reverse
+        reverse:reverse,
+        wildColour: false
       });
     }
   };
@@ -444,13 +468,13 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
         setMessages([
           ...messages,
           {
-            messageId: messages.length,
+            messageId: findUser(userId).username + Date.now(),
             fromId: findUser(userId).userNum,
             fromUser: findUser(userId).username,
             content: "UNO!"
           },
           {
-            messageId: messages.length + 1,
+            messageId: "GameBot" + Date.now(),
             fromId: -1,
             fromUser: "GameBot",
             content: currentPlayer.name + " is not on their last card!"
@@ -460,13 +484,13 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
         setMessages([
           ...messages,
           {
-            messageId: messages.length,
+            messageId: findUser(userId).username + Date.now(),
             fromId: findUser(userId).userNum,
             fromUser: findUser(userId).username,
             content: "UNO!"
           },
           {
-            messageId: messages.length,
+            messageId: "GameBot" + Date.now(),
             fromId: -1,
             fromUser: "GameBot",
             content: "You said uno first!"
@@ -494,13 +518,13 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
         setMessages([
           ...messages,
           {
-            messageId: messages.length,
+            messageId: findUser(userId).username + Date.now(),
             fromId: findUser(userId).userNum,
             fromUser: findUser(userId).username,
             content: "UNO!"
           },
           {
-            messageId: messages.length + 1,
+            messageId: "GameBot" + Date.now(),
             fromId: -1,
             fromUser: "GameBot",
             content: "You are not on your last card!"
@@ -510,14 +534,15 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
           change:true, 
           matchCard: matchCard, 
           ignoreMatch:false, 
-          reverse:reverse
+          reverse:reverse,
+          wildColour: false
         });
       } else if (saidUno !== "other") {
         setSaidUno("you");
         setMessages([
           ...messages,
           {
-            messageId: messages.length,
+            messageId: "GameBot" + Date.now(),
             fromId: -1,
             fromUser: "GameBot",
             content: "You said uno first!"
@@ -528,55 +553,62 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
     }
   }
 
+  const [playedWild, setPlayedWild] = useState(false);
+
   const playCard = card => {
+    const cardIsAllowed = wildColour ?
+        card.id[0] === wildColour :
+        (
+            card.id[0] === matchCard.id[0] ||  //Matching colour
+            card.id[1] === matchCard.id[1]     //Matching number
+        );
     if (
-      (card.id[0] === matchCard.id[0] || //Matching colour
-       card.id[1] === matchCard.id[1] || //Matching number
-       card.id[0] === 'W'             || //Wildcard
-       matchCard.id[0] === 'W'
+      (
+       cardIsAllowed      ||
+       card.id[0] === 'W'    //Wildcard
       ) &&
       card.playable && yourTurn
     ) {
       //Win condition
       if (yourHand.length === 1) {
-        if (saidUno === "you") {
+        //if (saidUno === "you") {
           const winner = findUser(userId).username;
           setGameWon(winner);
           socket.emit("game-won", winner);
           return;
-        } else if (saidUno === "none") {
-          setMessages([
-            ...messages,
-            {
-              messageId: messages.length,
-              fromId: -1,
-              fromUser: "GameBot",
-              content: "You forgot to say uno!"
-            }
-          ]);
-          const newCards = drawCards(4);
-          if (newCards) {
-            const newCardIndices = [];
-            const newCardValues  = [];
-            newCards.forEach(card => {
-              newCardIndices.push(card.index);
-              card.card.playable = true;
-              newCardValues.push(card.card);
-            });
-            socket.emit("remove-from-deck", newCardIndices);
-            socket.emit("set-players-cards", yourHand.length + 4);
-            setYourHand([
-              ...yourHand,
-              ...newCardValues
-            ]);
-          }
-          socket.emit("start-round", {
-            change:true, 
-            matchCard: card, 
-            ignoreMatch:false, 
-            reverse:reverse
-          });
-        }
+        // } else if (saidUno === "none") {
+        //   setMessages([
+        //     ...messages,
+        //     {
+        //       messageId: messages.length,
+        //       fromId: -1,
+        //       fromUser: "GameBot",
+        //       content: "You forgot to say uno!"
+        //     }
+        //   ]);
+        //   const newCards = drawCards(4);
+        //   if (newCards) {
+        //     const newCardIndices = [];
+        //     const newCardValues  = [];
+        //     newCards.forEach(card => {
+        //       newCardIndices.push(card.index);
+        //       card.card.playable = true;
+        //       newCardValues.push(card.card);
+        //     });
+        //     socket.emit("remove-from-deck", newCardIndices);
+        //     socket.emit("set-players-cards", yourHand.length + 4);
+        //     setYourHand([
+        //       ...yourHand,
+        //       ...newCardValues
+        //     ]);
+        //   }
+        //   socket.emit("start-round", {
+        //     change:true, 
+        //     matchCard: card, 
+        //     ignoreMatch:false, 
+        //     reverse:reverse
+        //   });
+        // }
       }
       yourHand.splice(yourHand.indexOf(card), 1);
       //Update the no. of cards in your hand for other players
@@ -591,7 +623,10 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
       setHasDrawnCard(false);
       //Check if you played a wild card
       let switchReverse = reverse;
-      if (card.id[0] === 'W' && card.id[1] === '-') return;
+      if (card.id[0] === 'W') {
+        setPlayedWild(true);
+        return true;
+      }
       //Check if you played a reverse card
       if (card.id[1] === 'R') {
         switchReverse = !reverse;
@@ -601,20 +636,34 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
         change:true, 
         matchCard: card, 
         ignoreMatch:false, 
-        reverse:switchReverse
+        reverse:switchReverse,
+        wildColour: false
       });
+      return true;
     } else {
       setMessages([
         ...messages,
         {
-          messageId: messages.length,
+          messageId: "GameBot" + Date.now(),
           fromId: -1, 
           fromUser: "GameBot", 
           content: yourTurn ? "You cannot play this card" : "It is not your turn"
         }
       ]);
+      return false;
     }
   }
+
+  const pickColour = colourChoice => {
+    socket.emit("start-round", {
+      change: true,
+      matchCard: matchCard,
+      ignoreMatch: false,
+      reverse: reverse,
+      wildColour: colourChoice
+    });
+    setPlayedWild(false);
+  };
 
   const [disconnected, setDisconnected] = useState(false);
   useEffect(() => {
@@ -630,6 +679,30 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
     });
     return () => socket.off("disconnected");
   }, [socket]);
+
+  const sendMessage = () => {
+    const newMessage = document.getElementById("inp-message").value;
+    if (newMessage !== "") {
+      // if (newMessage === "UNO!") {
+      //   shoutUno();
+      //   document.getElementById("inp-message").value = "";
+      //   return;
+      // }
+      const username = findUser(userId).username;
+      const usernum  = findUser(userId).userNum;
+      setMessages([
+        ...messages,
+        {
+          messageId: username + Date.now(),
+          fromId: usernum, 
+          fromUser: username, 
+          content: newMessage
+        }
+      ]);
+      socket.emit("send-message", newMessage);
+      document.getElementById("inp-message").value = "";
+    }
+  }
 
   return (
     <div className="row h-100 mx-0">
@@ -672,33 +745,21 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
             <div className="h-15">
                 <hr/>
                 <div className="row d-flex justify-content-center">
-                    <textarea className="form-control col-6" id="inp-message"></textarea>
+                    <textarea 
+                        className="form-control col-6" 
+                        id="inp-message"
+                        onKeyDown={e => {
+                          if (e.keyCode === 13) {
+                            e.preventDefault();
+                            sendMessage();
+                          }
+                        }}
+                    ></textarea>
                     <button 
                         type="button" 
                         className="btn btn-lg btn-success col-4 ml-2"
                         onClick={() => {
-                          const newMessage = document.getElementById("inp-message").value;
-                          if (newMessage !== "") {
-                            if (newMessage === "UNO!") {
-                              shoutUno();
-                              document.getElementById("inp-message").value = "";
-                              return;
-                            }
-
-                            const username = findUser(userId).username;
-                            const usernum  = findUser(userId).userNum;
-                            setMessages([
-                              ...messages,
-                              {
-                                messageId: messages.length,
-                                fromId: usernum, 
-                                fromUser: username, 
-                                content: newMessage
-                              }
-                            ]);
-                            socket.emit("send-message", newMessage);
-                            document.getElementById("inp-message").value = "";
-                          }
+                          sendMessage();
                         }}
                     >
                         Send
@@ -722,6 +783,48 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
                         >
                             Back to menu
                         </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div className={"modal fade " + (playedWild ? "d-block show" : "")} tabIndex="-1">
+            <div className="modal-dialog modal-dialog-centered" role="document">
+                <div className="modal-content">
+                    <div className="modal-body">
+                        <h1 className="text-center mb-4">
+                            Pick a colour:
+                        </h1>
+                        <div className="d-flex">
+                            <button 
+                                type="button" 
+                                className="btn btn-danger d-block mx-auto"
+                                onClick={() => pickColour('R')}
+                            >
+                                Red
+                            </button>
+                            <button 
+                                type="button" 
+                                className="btn btn-success d-block mx-auto"
+                                onClick={() => pickColour('G')}
+                            >
+                                Green
+                            </button>
+                            <button 
+                                type="button" 
+                                className="btn btn-warning d-block mx-auto"
+                                onClick={() => pickColour('Y')}
+                            >
+                                Yellow
+                            </button>
+                            <button 
+                                type="button" 
+                                className="btn btn-primary d-block mx-auto"
+                                onClick={() => pickColour('B')}
+                            >
+                                Blue
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

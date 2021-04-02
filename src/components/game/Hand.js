@@ -55,8 +55,8 @@ const Hand = ({cards, opponent, playCard, numCards}) => {
                                 height="176"
                                 onClick={() => {
                                   if (!opponent) {
-                                    if (startIndex > 0) setStartIndex(startIndex - 1);
-                                    playCard(card);
+                                    if (playCard(card) && startIndex > 0) 
+                                      setStartIndex(startIndex - 1);
                                   }
                                 }}
                             ></img> : ""
