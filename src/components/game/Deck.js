@@ -17,8 +17,8 @@ const Deck = ({card, drawNewCard, shoutUno}) => {
             ></img>
             <button 
                 type="button"
-                disabled={true}
                 className="btn btn-lg btn-primary mx-3"
+                disabled={true}
                 onClick={() => {shoutUno();}}
             >
                 UNO!

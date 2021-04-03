@@ -119,12 +119,6 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
     [room]
   );
 
-  /**
-   * none  - no one shouted
-   * you   - you shouted first
-   * other - someone else shouted first
-   */
-  const [saidUno, setSaidUno] = useState("none");
   const [yourTurn, setYourTurn] = useState(false);
 
   const drawCards = useCallback(n => {
@@ -203,7 +197,7 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
         let newCard;
         while (true) {
           newCard = drawCards(1)[0];
-          if (newCard.card.id !== "WD") break;
+          if (newCard.card.id[0] !== "W") break;
           else cards.splice(newCard.index, 0, newCard.card);
         }
         return newCard;
@@ -227,12 +221,33 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
     return () => socket.off("all-hands-drawn");
   }, [socket, allHandsDrawn]);
 
+  /**
+   * Messaging
+   */
+  const [messages, setMessages] = useState([])  
+  const receiveMessage = useCallback(({username, userNum, message}) => {
+    setMessages([
+      ...messages, 
+      {
+        messageId: username + Date.now(), 
+        fromId: userNum, 
+        fromUser: username, 
+        content: message
+      }
+    ]);
+  }, [messages]);
+  useEffect(() => {
+    socket.on("receive-message", receiveMessage);
+    return () => socket.off("receive-message");
+  }, [socket, receiveMessage]);
 
   const [currentPlayer, setCurrentPlayer] = useState(null);
   const [wildColour, setWildColour] = useState(false);
+  const [unoShouts, setUnoShouts] = useState([]);
   const newRound = useCallback(({currentUser, newMatchCard, ignoreMatch, reverse, wildColour}) => {
     setReverse(reverse);
     setWildColour(wildColour);
+    setUnoShouts([]);
     if (wildColour) {
       const colours = {
         'R' : "red",
@@ -298,7 +313,7 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
       name: currentUser.userId === userId ? "Your Turn" : currentUser.username,
       num: currentUser.userNum
     });
-  }, [userId, socket, yourHand, drawCards]);
+  }, [messages, userId, socket, yourHand, drawCards]);
   useEffect(() => {
     socket.on("new-round", newRound);
     return () => socket.off("new-round");
@@ -324,75 +339,6 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
     socket.on("set-players-cards", setOpponentsHand);
     return () => socket.off("set-players-cards");
   }, [socket, setOpponentsHand]);
-
-  /**
-   * Messaging
-   */
-  const [messages, setMessages] = useState([])  
-  const receiveMessage = useCallback(({username, userNum, message}) => {
-    if (
-      findUser(userId).userNum !== userNum &&
-      message === "UNO!" && 
-      yourTurn && 
-      saidUno !== "you" &&
-      yourHand.length === 1
-    ) {
-      setMessages([
-        ...messages,
-        {
-          messageId: username + Date.now(), 
-          fromId: userNum, 
-          fromUser: username, 
-          content: message
-        },
-        {
-          messageId: "GameBot" + Date.now(),
-          fromId: -1,
-          fromUser: "GameBot",
-          content: username + " said uno before you!"
-        }
-      ]);
-      const newCards = drawCards(4);
-      if (newCards) {
-        const newCardIndices = [];
-        const newCardValues  = [];
-        newCards.forEach(card => {
-          newCardIndices.push(card.index);
-          card.card.playable = true;
-          newCardValues.push(card.card);
-        });
-        socket.emit("remove-from-deck", newCardIndices);
-        socket.emit("set-players-cards", yourHand.length + 4);
-        setYourHand([
-          ...yourHand,
-          ...newCardValues
-        ]);
-      }
-      socket.emit("start-round", {
-        change:true, 
-        matchCard: matchCard, 
-        ignoreMatch:false, 
-        reverse:reverse,
-        wildColour: false
-      });
-    } else {
-      setMessages([
-        ...messages, 
-        {
-          messageId: username + Date.now(), 
-          fromId: userNum, 
-          fromUser: username, 
-          content: message
-        }
-      ]);
-    }
-  }, [
-    messages, yourTurn, saidUno, drawCards, reverse, 
-    matchCard, yourHand, socket, userId, findUser]);
-  useEffect(() => {
-    socket.on("receive-message", receiveMessage);
-    return () => socket.off("receive-message");
-  }, [socket, receiveMessage]);
 
   /**
    * Game logic
@@ -447,111 +393,47 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
   };
 
   const shoutUno = () => {
-    socket.emit("send-message", "UNO!");
-    if (!yourTurn) {
-      if (opponentsHand !== 1) {
-        const newCards = drawCards(4);
-        if (newCards) {
-          const newCardIndices = [];
-          const newCardValues  = [];
-          newCards.forEach(card => {
-            newCardIndices.push(card.index);
-            card.card.playable = true;
-            newCardValues.push(card.card);
-          });
-          socket.emit("remove-from-deck", newCardIndices);
-          setYourHand([
-            ...yourHand,
-            ...newCardValues
-          ]);
+    const numCardsLeft = yourTurn ? yourHand.length : opponentsHand
+    if (numCardsLeft !== 1) {
+      setMessages([
+        ...messages,
+        {
+          messageId: "GameBot" + Date.now(),
+          fromId: -1, 
+          fromUser: "GameBot", 
+          content: yourTurn ? "You are not on your last card" : 
+            currentPlayer.name + " is not on their last card"
         }
-        setMessages([
-          ...messages,
-          {
-            messageId: findUser(userId).username + Date.now(),
-            fromId: findUser(userId).userNum,
-            fromUser: findUser(userId).username,
-            content: "UNO!"
-          },
-          {
-            messageId: "GameBot" + Date.now(),
-            fromId: -1,
-            fromUser: "GameBot",
-            content: currentPlayer.name + " is not on their last card!"
-          }
-        ]);
-      } else {
-        setMessages([
-          ...messages,
-          {
-            messageId: findUser(userId).username + Date.now(),
-            fromId: findUser(userId).userNum,
-            fromUser: findUser(userId).username,
-            content: "UNO!"
-          },
-          {
-            messageId: "GameBot" + Date.now(),
-            fromId: -1,
-            fromUser: "GameBot",
-            content: "You said uno first!"
-          }
-        ]);
-      }
-    } else {
-      if (yourHand.length !== 1) {
-        const newCards = drawCards(4);
-        if (newCards) {
-          const newCardIndices = [];
-          const newCardValues  = [];
-          newCards.forEach(card => {
-            newCardIndices.push(card.index);
-            card.card.playable = true;
-            newCardValues.push(card.card);
-          });
-          socket.emit("remove-from-deck", newCardIndices);
-          socket.emit("set-players-cards", yourHand.length + 4);
-          setYourHand([
-            ...yourHand,
-            ...newCardValues
-          ]);
-        }
-        setMessages([
-          ...messages,
-          {
-            messageId: findUser(userId).username + Date.now(),
-            fromId: findUser(userId).userNum,
-            fromUser: findUser(userId).username,
-            content: "UNO!"
-          },
-          {
-            messageId: "GameBot" + Date.now(),
-            fromId: -1,
-            fromUser: "GameBot",
-            content: "You are not on your last card!"
-          }
-        ]);
-        socket.emit("start-round", {
-          change:true, 
-          matchCard: matchCard, 
-          ignoreMatch:false, 
-          reverse:reverse,
-          wildColour: false
-        });
-      } else if (saidUno !== "other") {
-        setSaidUno("you");
-        setMessages([
-          ...messages,
-          {
-            messageId: "GameBot" + Date.now(),
-            fromId: -1,
-            fromUser: "GameBot",
-            content: "You said uno first!"
-          }
-        ]);
-      }
-      
+      ]);
+      return;
     }
+
+    const timeShouted = Date.now();
+    setUnoShouts([
+      ...unoShouts,
+      {
+        username: findUser(userId).username,
+        userId: userId,
+        timeShouted: timeShouted
+      }
+    ]);
+    socket.emit("shout-uno", timeShouted);
   }
+
+  const unoShouted = useCallback(({timeShouted, userId}) => {
+    setUnoShouts([
+      ...unoShouts,
+      {
+        username: findUser(userId).username,
+        userId: userId,
+        timeShouted: timeShouted
+      }
+    ]);
+  }, [unoShouts, findUser]);
+  useEffect(() => {
+    socket.on("uno-shouted", unoShouted);
+    return () => socket.off("uno-shouted");
+  }, [socket, unoShouted]);
 
   const [playedWild, setPlayedWild] = useState(false);
 
@@ -559,8 +441,8 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
     const cardIsAllowed = wildColour ?
         card.id[0] === wildColour :
         (
-            card.id[0] === matchCard.id[0] ||  //Matching colour
-            card.id[1] === matchCard.id[1]     //Matching number
+          card.id[0] === matchCard.id[0] ||  //Matching colour
+          card.id[1] === matchCard.id[1]     //Matching number
         );
     if (
       (
@@ -571,44 +453,49 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
     ) {
       //Win condition
       if (yourHand.length === 1) {
-        //if (saidUno === "you") {
-          const winner = findUser(userId).username;
-          setGameWon(winner);
-          socket.emit("game-won", winner);
+        const shoutedUno = unoShouts.find(shout => shout.userId === userId);
+        if (!shoutedUno) {
+          const botMessage = {
+            messageId: "GameBot" + Date.now(),
+            fromId: -1, 
+            fromUser: "GameBot", 
+            content: findUser(userId).username + " forgot to say uno!"
+          }
+          setMessages([
+            ...messages,
+            botMessage
+          ]);
+          socket.emit("send-message", botMessage, true);
+          return false;
+        }
+        let earliestShout = null;
+        unoShouts.forEach(shout => {
+          if (!earliestShout) {
+            earliestShout = shout;
+            return;
+          }
+          if (shout.timeShouted < earliestShout.timeShouted) {
+            earliestShout = shout;
+          }
+        });
+        if (earliestShout.userId !== userId) {
+          const botMessage = {
+            messageId: "GameBot" + Date.now(),
+            fromId: -1, 
+            fromUser: "GameBot", 
+            content: earliestShout.username + " said uno first!"
+          }
+          setMessages([
+            ...messages,
+            botMessage
+          ]);
+          socket.emit("send-message", botMessage, true);
           return;
-        // } else if (saidUno === "none") {
-        //   setMessages([
-        //     ...messages,
-        //     {
-        //       messageId: messages.length,
-        //       fromId: -1,
-        //       fromUser: "GameBot",
-        //       content: "You forgot to say uno!"
-        //     }
-        //   ]);
-        //   const newCards = drawCards(4);
-        //   if (newCards) {
-        //     const newCardIndices = [];
-        //     const newCardValues  = [];
-        //     newCards.forEach(card => {
-        //       newCardIndices.push(card.index);
-        //       card.card.playable = true;
-        //       newCardValues.push(card.card);
-        //     });
-        //     socket.emit("remove-from-deck", newCardIndices);
-        //     socket.emit("set-players-cards", yourHand.length + 4);
-        //     setYourHand([
-        //       ...yourHand,
-        //       ...newCardValues
-        //     ]);
-        //   }
-        //   socket.emit("start-round", {
-        //     change:true, 
-        //     matchCard: card, 
-        //     ignoreMatch:false, 
-        //     reverse:reverse
-        //   });
-        // }
+        }
+        const winner = findUser(userId).username;
+        setGameWon(winner);
+        socket.emit("game-won", winner);
+        return;
       }
       yourHand.splice(yourHand.indexOf(card), 1);
       //Update the no. of cards in your hand for other players
@@ -683,11 +570,6 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
   const sendMessage = () => {
     const newMessage = document.getElementById("inp-message").value;
     if (newMessage !== "") {
-      // if (newMessage === "UNO!") {
-      //   shoutUno();
-      //   document.getElementById("inp-message").value = "";
-      //   return;
-      // }
       const username = findUser(userId).username;
       const usernum  = findUser(userId).userNum;
       setMessages([
