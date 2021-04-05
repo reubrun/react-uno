@@ -1,4 +1,4 @@
-const Deck = ({card, drawNewCard, shoutUno}) => {
+const Deck = ({card, drawNewCard, shoutUno, unoShouts, userId}) => {
     const cardBack = {
       alt: "Back of card",
       img: "./assets/Deck.png",
@@ -17,8 +17,12 @@ const Deck = ({card, drawNewCard, shoutUno}) => {
             ></img>
             <button 
                 type="button"
-                className="btn btn-lg btn-primary mx-3"
-                disabled={true}
+                className={
+                    "btn btn-lg mx-3 " + 
+                    (unoShouts.find(shout => shout.userId === userId) ? 
+                        "btn-success" : "btn-primary")
+                }
+                disabled={unoShouts.find(shout => shout.userId === userId) ? true : false}
                 onClick={() => {shoutUno();}}
             >
                 UNO!

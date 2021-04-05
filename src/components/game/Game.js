@@ -289,7 +289,7 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
           matchCard: newMatchCard, 
           ignoreMatch: true, 
           reverse: reverse,
-          wildColour: false
+          wildColour: (newMatchCard.id[0] === "W") ? wildColour : false
         });
         return;
       }
@@ -363,7 +363,8 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
       });
       setHasDrawnCard(true);
     }
-    const newCard = drawCards(1)[0];
+    const drawnCard = drawCards(1);
+    const newCard = drawnCard ? drawnCard[0] : null;
     if (newCard) {
       socket.emit("remove-from-deck", [newCard.index]);
       newCard.card.playable = true;
@@ -373,6 +374,7 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
         newCard.card
       ]);
     } else {
+      yourHand.forEach(card => {card.playable = true});
       setMessages([
         ...messages,
         {
@@ -438,6 +440,23 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
   const [playedWild, setPlayedWild] = useState(false);
 
   const playCard = card => {
+    if (card.id.startsWith("WD")) {
+      if (yourHand.find(card => card.id[0] !== "W" && card.id[0] === matchCard.id[0])) {
+        setMessages([
+          ...messages,
+          {
+            messageId: "GameBot" + Date.now(),
+            fromId: -1,
+            fromUser: "GameBot",
+            content: yourTurn ?
+              "You can only play a wild draw 4 card when you do not have any other cards that match the colour of the previously played card" :
+              "It is not your turn"
+          }
+        ]);
+        return false;
+      }
+    }
+
     const cardIsAllowed = wildColour ?
         card.id[0] === wildColour :
         (
@@ -454,6 +473,7 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
       //Win condition
       if (yourHand.length === 1) {
         const shoutedUno = unoShouts.find(shout => shout.userId === userId);
+        let canWin = true;
         if (!shoutedUno) {
           const botMessage = {
             messageId: "GameBot" + Date.now(),
@@ -465,8 +485,8 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
             ...messages,
             botMessage
           ]);
-          socket.emit("send-message", botMessage, true);
-          return false;
+          socket.emit("send-message", botMessage.content, true);
+          canWin = false;
         }
         let earliestShout = null;
         unoShouts.forEach(shout => {
@@ -478,7 +498,7 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
             earliestShout = shout;
           }
         });
-        if (earliestShout.userId !== userId) {
+        if (earliestShout && earliestShout.userId !== userId) {
           const botMessage = {
             messageId: "GameBot" + Date.now(),
             fromId: -1, 
@@ -489,13 +509,38 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
             ...messages,
             botMessage
           ]);
-          socket.emit("send-message", botMessage, true);
-          return;
+          socket.emit("send-message", botMessage.content, true);
+          canWin = false;
         }
-        const winner = findUser(userId).username;
-        setGameWon(winner);
-        socket.emit("game-won", winner);
-        return;
+        if (canWin) {
+          const winner = findUser(userId).username;
+          setGameWon(winner);
+          socket.emit("game-won", winner);
+          return;
+        } else {
+          const newCards = drawCards(2);
+          if (newCards) {
+            const newCardIndices = [];
+            const newCardValues  = [];
+            newCards.forEach(card => {
+              newCardIndices.push(card.index);
+              card.card.playable = true;
+              newCardValues.push(card.card);
+            });
+            socket.emit("remove-from-deck", newCardIndices);
+            setYourHand([
+              ...yourHand,
+              ...newCardValues
+            ]);
+          }
+          socket.emit("start-round", {
+            change: true, 
+            matchCard: matchCard, 
+            ignoreMatch: false, 
+            reverse: reverse,
+            wildColour: false
+          });
+        }
       }
       yourHand.splice(yourHand.indexOf(card), 1);
       //Update the no. of cards in your hand for other players
@@ -521,7 +566,7 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
       }
       socket.emit("start-round", {
         change:true, 
-        matchCard: card, 
+        matchCard:card, 
         ignoreMatch:false, 
         reverse:switchReverse,
         wildColour: false
@@ -605,7 +650,13 @@ const Game = ({userId, startUserId, room, socket, userColours}) => {
             }
             </div>
             <div className="row d-flex align-items-center" style={{height: "33%"}}>
-                <Deck card={matchCard} drawNewCard={drawNewCard} shoutUno={shoutUno}/>
+                <Deck 
+                    card={matchCard} 
+                    drawNewCard={drawNewCard} 
+                    shoutUno={shoutUno}
+                    unoShouts={unoShouts}
+                    userId={userId}
+                />
             </div>
             <div className="row d-flex align-items-end" style={{height: "33%"}}>
                 <Hand cards={yourHand} opponent={false} playCard={playCard}/>
